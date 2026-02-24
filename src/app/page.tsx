@@ -200,7 +200,11 @@ export default function Home() {
                       remarkPlugins={[remarkMath]}
                       rehypePlugins={[rehypeKatex]}
                     >
-                      {message.content}
+                      {message.content
+                        .replace(/\\\(/g, "$")
+                        .replace(/\\\)/g, "$")
+                        .replace(/\\\[/g, "$$")
+                        .replace(/\\\]/g, "$$")}
                     </ReactMarkdown>
                   </div>
                   <span className="block mt-1.5 text-[10px] text-white/20">
