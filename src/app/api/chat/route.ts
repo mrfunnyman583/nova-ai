@@ -13,6 +13,7 @@ const MODELS = [
 interface ChatMessage {
     role: "system" | "user" | "assistant";
     content: string;
+    [key: string]: any;
 }
 
 export async function POST(req: NextRequest) {
