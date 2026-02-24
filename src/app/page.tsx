@@ -3,6 +3,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Sparkles, Loader2 } from "lucide-react";
 import dynamic from "next/dynamic";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
 
 const AnoAI = dynamic(
   () => import("@/components/ui/animated-shader-background"),
@@ -174,8 +177,8 @@ export default function Home() {
                 {/* Avatar */}
                 <div
                   className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-lg border ${message.role === "user"
-                      ? "bg-indigo-500/15 border-indigo-400/20"
-                      : "bg-cyan-500/10 border-cyan-400/15"
+                    ? "bg-indigo-500/15 border-indigo-400/20"
+                    : "bg-cyan-500/10 border-cyan-400/15"
                     }`}
                 >
                   {message.role === "user" ? (
@@ -188,11 +191,18 @@ export default function Home() {
                 {/* Bubble */}
                 <div
                   className={`max-w-[75%] px-4 py-3 rounded-2xl text-[14px] leading-relaxed ${message.role === "user"
-                      ? "bg-indigo-500/15 text-white/90 border border-indigo-400/10 rounded-tr-md"
-                      : "bg-white/[0.04] text-white/80 border border-white/[0.06] rounded-tl-md"
+                    ? "bg-indigo-500/15 text-white/90 border border-indigo-400/10 rounded-tr-md"
+                    : "bg-white/[0.04] text-white/80 border border-white/[0.06] rounded-tl-md"
                     }`}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/10 max-w-none break-words">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
                   <span className="block mt-1.5 text-[10px] text-white/20">
                     {message.timestamp.toLocaleTimeString([], {
                       hour: "2-digit",
