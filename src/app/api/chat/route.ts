@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
                 const response = await hf.chatCompletion({
                     model: model,
                     messages: formattedMessages,
-                    max_tokens: 400,
+                    max_tokens: 2048,
                     temperature: 0.7,
                 });
 

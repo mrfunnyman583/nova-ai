@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Sparkles, Loader2 } from "lucide-react";
+import { Send, Bot, User, Sparkles, Loader2, MessageSquarePlus, Copy, Check } from "lucide-react";
 import dynamic from "next/dynamic";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
+import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 
 const AnoAI = dynamic(
@@ -23,8 +24,28 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setInput("");
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.focus();
+    }
+  };
+
+  const copyToClipboard = async (id: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error("Failed to copy text", err);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -86,6 +107,9 @@ export default function Home() {
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 10);
     }
   };
 
@@ -115,19 +139,30 @@ export default function Home() {
       <div className="relative z-10 flex flex-col items-center justify-center w-full h-full px-4">
         <div className="flex flex-col w-full max-w-3xl h-[90vh] rounded-2xl overflow-hidden border border-white/[0.08] bg-black/30 backdrop-blur-2xl shadow-[0_0_80px_rgba(100,150,255,0.06)]">
           {/* Header */}
-          <div className="flex items-center gap-3 px-6 py-4 border-b border-white/[0.06] bg-white/[0.02]">
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 border border-white/[0.08]">
-              <Sparkles className="w-5 h-5 text-cyan-400" />
-              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-black/60" />
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-indigo-500/20 border border-white/[0.08]">
+                <Sparkles className="w-5 h-5 text-cyan-400" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-black/60" />
+              </div>
+              <div>
+                <h1 className="text-[15px] font-semibold text-white/90 tracking-tight">
+                  Nova AI
+                </h1>
+                <p className="text-[11px] text-white/40 tracking-wide uppercase">
+                  Powered by Mistral · Free & Open
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-[15px] font-semibold text-white/90 tracking-tight">
-                Nova AI
-              </h1>
-              <p className="text-[11px] text-white/40 tracking-wide uppercase">
-                Powered by Mistral · Free & Open
-              </p>
-            </div>
+            {messages.length > 0 && (
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06] text-white/60 hover:text-white/90 hover:bg-white/[0.08] hover:border-white/[0.12] transition-all text-xs font-medium"
+              >
+                <MessageSquarePlus className="w-3.5 h-3.5" />
+                New Chat
+              </button>
+            )}
           </div>
 
           {/* Messages Area */}
@@ -197,7 +232,7 @@ export default function Home() {
                 >
                   <div className="prose prose-invert prose-p:leading-relaxed prose-pre:bg-white/5 prose-pre:border prose-pre:border-white/10 max-w-none break-words">
                     <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
+                      remarkPlugins={[remarkMath, remarkGfm]}
                       rehypePlugins={[rehypeKatex]}
                     >
                       {message.content
@@ -207,12 +242,27 @@ export default function Home() {
                         .replace(/\\\]/g, "$$")}
                     </ReactMarkdown>
                   </div>
-                  <span className="block mt-1.5 text-[10px] text-white/20">
-                    {message.timestamp.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-[10px] text-white/20">
+                      {message.timestamp.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {message.role === "assistant" && (
+                      <button
+                        onClick={() => copyToClipboard(message.id, message.content)}
+                        className="p-1 rounded text-white/30 hover:text-white/70 hover:bg-white/5 transition-all"
+                        title="Copy message"
+                      >
+                        {copiedId === message.id ? (
+                          <Check className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -247,6 +297,7 @@ export default function Home() {
                 onKeyDown={handleKeyDown}
                 placeholder="Type a message..."
                 rows={1}
+                autoFocus
                 className="flex-1 bg-transparent text-white/90 placeholder-white/20 text-sm resize-none outline-none px-2 py-2 max-h-[150px]"
               />
               <button
