@@ -17,19 +17,68 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  timestamp: Date;
+  timestamp: number;
+}
+
+interface Chat {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export default function Home() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const activeChat = chats.find((chat) => chat.id === activeChatId) || null;
+  const messages = activeChat?.messages ?? [];
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("nova_chats_v1");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Chat[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setChats(parsed);
+        setActiveChatId(parsed[0].id);
+      }
+    } catch (err) {
+      console.error("Failed to load chats from storage", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("nova_chats_v1", JSON.stringify(chats));
+    } catch (err) {
+      console.error("Failed to save chats to storage", err);
+    }
+  }, [chats]);
+
+  const formatTimestamp = (timestamp: number) => {
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const createChatTitle = (firstMessage: string) => {
+    const trimmed = firstMessage.trim();
+    if (!trimmed) return "New chat";
+    return trimmed.length > 60 ? `${trimmed.slice(0, 57)}...` : trimmed;
+  };
+
   const handleNewChat = () => {
-    setMessages([]);
+    setActiveChatId(null);
     setInput("");
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
@@ -53,7 +102,7 @@ export default function Home() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,10 +112,42 @@ export default function Home() {
       id: Date.now().toString(),
       role: "user",
       content: input.trim(),
-      timestamp: new Date(),
+      timestamp: Date.now(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    let targetChatId = activeChatId;
+    let baseMessages: Message[] = activeChat?.messages ?? [];
+
+    if (!targetChatId) {
+      const now = Date.now();
+      const newChatId = now.toString();
+      targetChatId = newChatId;
+      const newChat: Chat = {
+        id: newChatId,
+        title: createChatTitle(userMessage.content),
+        messages: [userMessage],
+        createdAt: now,
+        updatedAt: now,
+      };
+      setChats((prev) => [newChat, ...prev]);
+      setActiveChatId(newChatId);
+      baseMessages = [];
+    } else {
+      setChats((prev) =>
+        prev.map((chat) =>
+          chat.id === targetChatId
+            ? {
+                ...chat,
+                messages: [...chat.messages, userMessage],
+                updatedAt: Date.now(),
+              }
+            : chat,
+        ),
+      );
+    }
+
+    const apiMessages = [...baseMessages, userMessage];
+
     setInput("");
     setIsLoading(true);
 
@@ -80,7 +161,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, userMessage].map((m) => ({
+          messages: apiMessages.map((m) => ({
             role: m.role,
             content: m.content,
           })),
@@ -93,18 +174,42 @@ export default function Home() {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: data.reply || "I couldn't generate a response.",
-        timestamp: new Date(),
+        timestamp: Date.now(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      if (targetChatId) {
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === targetChatId
+              ? {
+                  ...chat,
+                  messages: [...chat.messages, assistantMessage],
+                  updatedAt: Date.now(),
+                }
+              : chat,
+          ),
+        );
+      }
     } catch {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: "Something went wrong. Please try again.",
-        timestamp: new Date(),
+        timestamp: Date.now(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      if (targetChatId) {
+        setChats((prev) =>
+          prev.map((chat) =>
+            chat.id === targetChatId
+              ? {
+                  ...chat,
+                  messages: [...chat.messages, errorMessage],
+                  updatedAt: Date.now(),
+                }
+              : chat,
+          ),
+        );
+      }
     } finally {
       setIsLoading(false);
       setTimeout(() => {
@@ -164,6 +269,35 @@ export default function Home() {
               </button>
             )}
           </div>
+
+          {/* Chat History */}
+          {chats.length > 0 && (
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-white/[0.05] bg-black/20 overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
+              <span className="text-[10px] uppercase tracking-[0.16em] text-white/35 flex-shrink-0">
+                Recent Chats
+              </span>
+              <div className="flex gap-2">
+                {chats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    onClick={() => {
+                      setActiveChatId(chat.id);
+                      if (inputRef.current) {
+                        inputRef.current.focus();
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-full text-[11px] border transition-all whitespace-nowrap ${
+                      chat.id === activeChatId
+                        ? "bg-white/[0.14] border-white/60 text-white shadow-[0_0_20px_rgba(255,255,255,0.12)]"
+                        : "bg-white/[0.03] border-white/[0.08] text-white/60 hover:bg-white/[0.08] hover:text-white hover:border-white/[0.16]"
+                    }`}
+                  >
+                    {chat.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
@@ -244,10 +378,7 @@ export default function Home() {
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-[10px] text-white/20">
-                      {message.timestamp.toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatTimestamp(message.timestamp)}
                     </span>
                     {message.role === "assistant" && (
                       <button
